@@ -19,6 +19,7 @@
 <p align="center">
   <img src="screenshots/home.png" width="25%" />
   <img src="screenshots/verify.png" width="25%" />
+</br>
   <img src="screenshots/modify.png" width="25%" />
   <img src="screenshots/retire.jpg" width="25%" />
 </p>
