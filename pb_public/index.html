@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>HowMuch 资产看板</title>
+    <link rel="icon" type="image/png" href="/icon.png">
+    <link rel="apple-touch-icon" href="/icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="HowMuch">
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/dayjs@1/dayjs.min.js"></script>
+    <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* 当 Vue 挂载成功后，通过这个 class 渐隐加载动画 */
+        .loaded #pre-loader { opacity: 0; pointer-events: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        [v-cloak] { display: none; }
+        :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
+        html, body { overscroll-behavior-y: none; height: 100%; background: #f8fafc; }
+        .ios-safe-top { padding-top: var(--sat); }
+        .ios-safe-bottom { padding-bottom: var(--sab); }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        * { -webkit-touch-callout: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+        input, select, textarea { -webkit-user-select: auto; user-select: auto; -webkit-appearance: none; }
+        input[type="date"] { display: block; min-height: 3.5rem; width: 100%; }
+        select { text-align: center; text-align-last: center; }
+    </style>
+</head>
+<body class="text-slate-900 font-sans antialiased text-left">
+    <div id="app" v-cloak class="max-w-md mx-auto min-h-screen flex flex-col relative">
+        <div id="pre-loader" class="fixed inset-0 bg-slate-50 z-[200] flex flex-col items-center justify-center transition-opacity duration-500">
+    <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+    <p class="mt-4 text-slate-400 text-xs font-bold tracking-widest uppercase animate-pulse">Loading Assets...</p>
+</div>
+        <transition name="fade">
+            <div v-if="!isLogged" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto">
+                <div class="w-20 h-20 bg-blue-600 rounded-[2rem] shadow-xl shadow-blue-200 flex items-center justify-center mb-6">
+                    <i data-lucide="shield-check" class="text-white w-10 h-10"></i>
+                </div>
+                <h2 class="text-xl font-black text-slate-800 mb-2 tracking-tighter uppercase">HowMuch Verify</h2>
+                <div class="w-full space-y-4">
+                    <input v-model="loginForm.email" type="email" placeholder="Email" class="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 outline-none font-bold text-center">
+                    <input v-model="loginForm.password" @keyup.enter="handleLogin" type="password" placeholder="Password" class="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 outline-none font-bold text-center">
+                    <button @click="handleLogin" :disabled="loading" class="w-full h-16 bg-slate-900 text-white rounded-2xl font-black shadow-xl active:scale-95 transition-all">确认进入</button>
+                </div>
+            </div>
+        </transition>
+
+        <template v-if="isLogged">
+            <header class="bg-white sticky top-0 z-20 border-b border-slate-100 shadow-sm ios-safe-top">
+                <div class="px-5 py-3 flex justify-between items-center gap-2">
+                    <button @click="handleLogout" class="w-9 h-9 flex items-center justify-center bg-slate-50 rounded-xl text-slate-400">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                    <h1 class="text-base font-black text-slate-800 tracking-tight text-center flex-1">HowMuch 看板</h1>
+                    <div class="flex gap-2">
+                        <button @click="showFilters = !showFilters" :class="showFilters ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-50 text-slate-400'" class="w-9 h-9 flex items-center justify-center rounded-xl transition-all">
+                            <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+                        </button>
+                        <button @click="openForm()" class="bg-blue-600 text-white w-9 h-9 flex items-center justify-center rounded-xl shadow-lg active:scale-90 transition-all">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="px-5 pb-4 space-y-2">
+                    <div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-[1.5rem] p-4 text-white shadow-xl flex justify-between items-center px-6">
+                        <p class="text-[10px] font-bold opacity-80 uppercase tracking-widest">每日总成本</p>
+                        <div class="flex items-baseline font-mono font-black">
+                            <span class="text-sm mr-0.5 opacity-70">¥</span>
+                            <span class="text-2xl tracking-tighter">{{ totalDailyCost }}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="bg-white border border-slate-100 p-3 rounded-2xl shadow-sm flex flex-col justify-center">
+                            <div class="w-full flex justify-between items-baseline border-b border-slate-50 pb-1.5 mb-1.5">
+                                <span class="text-[9px] text-slate-400 font-bold uppercase">服役中</span>
+                                <span class="text-sm font-mono font-black text-slate-700">{{ filteredActiveItems.length }}<span class="text-[9px] ml-0.5 font-normal opacity-40">件</span></span>
+                            </div>
+                            <div class="w-full flex justify-between items-baseline">
+                                <span class="text-[8px] text-slate-300 font-bold uppercase">历史购入</span>
+                                <span class="text-[10px] font-mono font-bold text-slate-400">{{ items.length }}<span class="text-[8px] ml-0.5 font-normal opacity-40">件</span></span>
+                            </div>
+                        </div>
+                        <div class="bg-white border border-slate-100 p-3 rounded-2xl shadow-sm flex flex-col justify-center">
+                            <div class="w-full flex justify-between items-baseline border-b border-slate-50 pb-1.5 mb-1.5">
+                                <span class="text-[9px] text-slate-400 font-bold uppercase truncate mr-1">持有总投入</span>
+                                <span class="text-sm font-mono font-black text-slate-700">¥{{ activeTotal }}</span>
+                            </div>
+                            <div class="w-full flex justify-between items-baseline">
+                                <span class="text-[8px] text-slate-300 font-bold uppercase">历史总投入</span>
+                                <span class="text-[10px] font-mono font-bold text-slate-400">¥{{ grandTotal }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border border-slate-100 px-4 py-1.5 rounded-xl shadow-sm flex justify-between items-center">
+                        <span class="text-[9px] text-emerald-500 font-black uppercase tracking-widest flex items-center gap-1.5">
+                            <i data-lucide="target" class="w-2.5 h-2.5"></i> 目标达成设备数
+                        </span>
+                        <span class="text-xs font-mono font-black text-emerald-600">{{ metTargetsCount }}<span class="text-[8px] ml-0.5 font-normal opacity-50 uppercase">件</span></span>
+                    </div>
+                </div>
+
+                <div v-if="showFilters" class="px-5 pb-3 flex gap-2">
+                    <select v-model="filterCategory" class="flex-1 bg-slate-50 text-[10px] font-bold py-2.5 px-3 rounded-xl border-none outline-none appearance-none">
+                        <option value="all">全部分类</option>
+                        <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                    </select>
+                    <select v-model="sortBy" class="flex-1 bg-slate-50 text-[10px] font-bold py-2.5 px-3 rounded-xl border-none outline-none appearance-none">
+                        <option value="date_desc">购入日期 ⏬</option>
+                        <option value="date_asc">购入日期 ⏫</option>
+                        <option value="price_desc">购入价格 ⏬</option>
+                        <option value="price_asc">购入价格 ⏫</option>
+                        <option value="total_desc">累计成本 ⏬</option>
+                        <option value="total_asc">累计成本 ⏫</option>
+                        <option value="daily_desc">日均成本 ⏬</option>
+                        <option value="daily_asc">日均成本 ⏫</option>
+                    </select>
+                </div>
+            </header>
+
+            <main class="flex-1 p-4 space-y-3">
+                <div class="space-y-2.5">
+                    <div @click="activeExpanded = !activeExpanded" class="flex items-center justify-between px-2 cursor-pointer">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">服役中 ({{ filteredActiveItems.length }})</span>
+                        <i data-lucide="chevron-down" :class="{'rotate-180': activeExpanded}" class="w-3.5 h-3.5 text-slate-300 transition-transform"></i>
+                    </div>
+                    
+                    <div v-if="activeExpanded" class="space-y-2.5">
+                        <div v-for="item in filteredActiveItems" :key="item.id" @click="openForm(item)"
+                             :class="isTargetMet(item) ? 'bg-emerald-50/40 border-emerald-100/50' : 'bg-white border-slate-50'"
+                             class="p-4 rounded-[1.5rem] border shadow-sm active:bg-slate-50 transition-all cursor-pointer relative">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 flex-shrink-0 bg-slate-50/50 rounded-2xl flex items-center justify-center text-slate-500 border border-slate-100/50">
+                                    <i :data-lucide="item.icon || 'package'" class="w-6 h-6"></i>
+                                </div>
+                                <div class="flex-1 min-w-0 flex flex-col justify-between h-12 text-left">
+                                    <h3 class="font-bold text-slate-800 truncate text-sm leading-tight flex items-center gap-1">
+                                        {{ item.name }}
+                                        <i v-if="isTargetMet(item)" data-lucide="party-popper" class="w-3 h-3 text-emerald-500"></i>
+                                    </h3>
+                                    <div class="flex items-baseline gap-1">
+                                        <span class="text-xl font-black text-slate-900 font-mono tracking-tighter">¥{{ calc(item).daily }}</span>
+                                        <span class="text-[9px] text-slate-400 font-bold">/天</span>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col items-end justify-center gap-0.5 flex-shrink-0 text-right min-w-[95px] border-l border-slate-50 pl-3">
+                                    <span class="text-[9px] text-slate-400 font-mono leading-none">持有 {{ calc(item).days }} 天</span>
+                                    <span class="text-[9px] text-slate-400 font-mono leading-none">购入价 ¥{{ item.price }}</span>
+                                    <span class="text-[9px] text-slate-400 font-mono leading-none">累计成本 ¥{{ calc(item).total }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="retiredItems.length > 0" class="pt-2 text-left">
+                    <div @click="retiredExpanded = !retiredExpanded" class="flex items-center justify-between px-5 py-2.5 bg-red-50/50 rounded-xl cursor-pointer border border-red-100">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="archive" class="w-3.5 h-3.5 text-red-400"></i>
+                            <span class="text-[10px] font-black text-red-500 uppercase tracking-widest">已退役 ({{ retiredItems.length }})</span>
+                        </div>
+                        <i data-lucide="chevron-down" :class="{'rotate-180': retiredExpanded}" class="w-3.5 h-3.5 text-red-400 transition-transform"></i>
+                    </div>
+                    <div v-if="retiredExpanded" class="mt-2 space-y-2">
+                        <div v-for="item in retiredItems" :key="item.id" @click="openForm(item)" class="bg-red-50/20 p-3 rounded-[1.5rem] border border-dashed border-red-100 flex items-center gap-3">
+                            <div class="w-10 h-10 flex-shrink-0 bg-white rounded-lg flex items-center justify-center text-red-300">
+                                <i :data-lucide="item.icon || 'package'" class="w-5 h-5"></i>
+                            </div>
+                            <div class="flex-1 min-w-0 flex flex-col justify-between h-10">
+                                <div class="flex justify-between items-center text-left">
+                                    <h3 class="font-bold text-slate-600 truncate text-xs">{{ item.name }}</h3>
+                                    <span class="text-[8px] text-red-400 font-mono">服役 {{ calc(item).days }} 天</span>
+                                </div>
+                                <div class="text-[9px] text-red-400 font-bold flex justify-between uppercase">
+                                    <span>¥{{ calc(item).daily }}/天</span>
+                                    <span>累计 ¥{{ calc(item).total }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <transition name="fade">
+                <div v-if="showForm" class="fixed inset-0 z-[60] flex justify-center ios-safe-top bg-slate-900/10 backdrop-blur-sm">
+                    <div class="w-full max-w-md bg-white flex flex-col shadow-2xl h-full overflow-hidden relative">
+                        <div class="px-5 py-3 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+                            <button @click="showForm = false" class="w-10 h-10 flex items-center justify-center bg-slate-50 rounded-full text-slate-600">
+                                <i data-lucide="chevron-left" class="w-6 h-6"></i>
+                            </button>
+                            <h2 class="text-sm font-black text-slate-800 tracking-widest uppercase flex-1 text-center">资产详情</h2>
+                            <div class="w-10"></div>
+                        </div>
+                        
+                        <div class="flex-1 overflow-y-auto px-5 py-6 space-y-6 bg-white no-scrollbar">
+                            <div class="space-y-4 text-left">
+                                <div class="space-y-2">
+                                    <div class="flex justify-between items-center ml-1">
+                                        <label class="text-[10px] font-black uppercase tracking-wider opacity-40">选择图标</label>
+                                        <button @click="toggleIconExpand" class="text-[10px] font-bold text-blue-600 flex items-center gap-1 active:opacity-60 transition-all">
+                                            {{ iconsExpanded ? '收起列表' : '展开全部' }}
+                                            <i :data-lucide="iconsExpanded ? 'chevron-up' : 'chevron-down'" class="w-3 h-3"></i>
+                                        </button>
+                                    </div>
+                                    <div :class="iconsExpanded ? 'grid grid-cols-5 gap-2 max-h-[300px] overflow-y-auto pr-1' : 'flex gap-2 overflow-x-auto no-scrollbar'" class="py-2 transition-all">
+                                        <button v-for="iconName in iconList" :key="iconName" @click="form.icon = iconName"
+                                                :class="form.icon === iconName ? 'bg-blue-600 text-white shadow-lg scale-95' : 'bg-slate-50 text-slate-300'"
+                                                class="w-11 h-11 flex-shrink-0 rounded-2xl flex items-center justify-center transition-all duration-200">
+                                            <i :data-lucide="iconName" class="w-5 h-5"></i>
+                                        </button>
+                                    </div>
+                                    <input v-model="form.category" type="text" list="clist" class="w-full bg-slate-50 rounded-2xl py-4 px-6 outline-none text-sm font-bold" placeholder="类别">
+                                    <datalist id="clist"><option v-for="cat in categories" :key="cat" :value="cat"></option></datalist>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-black opacity-40 uppercase ml-1">资产名称</label>
+                                    <input v-model="form.name" type="text" class="w-full bg-slate-50 rounded-2xl py-4 px-6 outline-none font-bold text-sm">
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="flex flex-col space-y-2">
+                                        <label class="text-[10px] font-black opacity-40 uppercase ml-1">购入价格</label>
+                                        <input v-model.number="form.price" type="number" class="w-full bg-slate-50 rounded-2xl py-4 px-6 outline-none font-bold text-sm">
+                                    </div>
+                                    <div class="flex flex-col space-y-2">
+                                        <label class="text-[10px] font-black opacity-40 uppercase ml-1">购买日期</label>
+                                        <input v-model="form.buy_date" type="date" class="w-full bg-slate-50 rounded-2xl py-4 px-4 outline-none font-bold text-[13px]">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="space-y-2">
+                                        <label class="text-[10px] font-black opacity-40 uppercase ml-1">当前状态</label>
+                                        <select v-model="form.status" class="w-full bg-slate-50 rounded-2xl py-4 px-6 outline-none font-bold text-sm">
+                                            <option value="active">正在服役</option>
+                                            <option value="retired">已经退役</option>
+                                        </select>
+                                    </div>
+                                    <div v-if="form.status === 'retired'" class="flex flex-col space-y-2">
+                                        <label class="text-[10px] font-black text-red-400 uppercase ml-1">退役日期</label>
+                                        <input v-model="form.retire_date" type="date" class="w-full bg-red-50 rounded-2xl py-4 px-4 outline-none font-bold text-[13px] text-red-600">
+                                    </div>
+                                </div>
+
+                                <div v-if="form.status === 'retired'" class="space-y-2">
+                                    <label class="text-[10px] font-black text-red-400 uppercase ml-1">变现回收金额</label>
+                                    <input v-model.number="form.resale_price" type="number" class="w-full bg-red-50 rounded-2xl py-4 px-6 outline-none font-bold text-sm text-red-500" placeholder="0">
+                                </div>
+
+                                <div class="bg-slate-50 p-5 rounded-[2rem] space-y-4 border border-slate-100">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <i data-lucide="target" class="w-3.5 h-3.5 text-slate-400"></i>
+                                            <label class="text-[10px] font-black opacity-60 uppercase">日均价挑战</label>
+                                        </div>
+                                        <div @click="form.enable_target = !form.enable_target" :class="form.enable_target ? 'bg-emerald-500' : 'bg-slate-300'" class="w-10 h-5 rounded-full relative transition-all cursor-pointer">
+                                            <div :class="form.enable_target ? 'translate-x-5' : 'translate-x-1'" class="absolute top-1 w-3 h-3 bg-white rounded-full transition-transform"></div>
+                                        </div>
+                                    </div>
+                                    <div v-if="form.enable_target" class="flex items-center gap-2 bg-white rounded-xl px-4 py-3 border border-slate-200">
+                                        <span class="text-[10px] font-bold text-slate-400">¥</span>
+                                        <input v-model.number="form.target_daily" type="number" step="0.01" class="flex-1 outline-none font-mono font-bold text-sm" placeholder="目标日均价">
+                                        <span class="text-[10px] font-bold text-slate-300">/天</span>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <label class="text-[10px] font-black opacity-40 uppercase ml-1">维护与升级等关联费用</label>
+                                    <div v-for="(exp, idx) in form.additional_expenses" :key="idx" class="bg-slate-50 p-4 rounded-2xl space-y-3 relative">
+                                        <button @click="form.additional_expenses.splice(idx, 1)" class="absolute top-3 right-3 text-slate-300 hover:text-red-400">
+                                            <i data-lucide="x" class="w-4 h-4"></i>
+                                        </button>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <input v-model="exp.name" type="text" placeholder="消费项" class="bg-white rounded-xl py-2 px-3 text-xs font-bold outline-none border border-slate-100">
+                                            <input v-model.number="exp.amount" type="number" placeholder="金额（元）" class="bg-white rounded-xl py-2 px-3 text-xs font-bold outline-none border border-slate-100">
+                                        </div>
+                                        <input v-model="exp.date" type="date" class="w-full bg-white rounded-xl py-2 px-3 text-[11px] font-bold outline-none border border-slate-100 min-h-[2.5rem]">
+                                    </div>
+                                    <button @click="addExpense" class="w-full py-4 border-2 border-dashed border-slate-100 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest hover:bg-slate-50 transition-all">
+                                        + 增加一笔费用
+                                    </button>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-black opacity-40 uppercase ml-1">备注说明</label>
+                                    <textarea v-model="form.remark" rows="2" class="w-full bg-slate-50 rounded-2xl py-4 px-6 outline-none text-sm font-medium resize-none"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+<div v-if="!form.id" class="mt-8 pt-8 border-t border-slate-100 space-y-4">
+    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-center">数据维护 (JSON)</h3>
+    <div class="grid grid-cols-2 gap-3">
+        <button @click="handleExport" class="flex items-center justify-center gap-2 bg-emerald-50 text-emerald-600 py-4 rounded-2xl text-xs font-bold active:scale-95 transition-all">
+            <i data-lucide="download" class="w-4 h-4"></i> 导出备份
+        </button>
+        <button @click="$refs.fileInput.click()" class="flex items-center justify-center gap-2 bg-amber-50 text-amber-600 py-4 rounded-2xl text-xs font-bold active:scale-95 transition-all">
+            <i data-lucide="upload" class="w-4 h-4"></i> 导入文件
+        </button>
+        <input type="file" ref="fileInput" class="hidden" accept=".json" @change="handleImport">
+    </div>
+</div>
+
+
+
+                        <div class="p-6 border-t flex gap-4 bg-white ios-safe-bottom sticky bottom-0 z-10 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.05)]">
+                            <button v-if="form.id" @click="deleteItem" class="w-16 h-16 flex items-center justify-center rounded-2xl bg-red-50 text-red-500 active:scale-90 transition-all">
+                                <i data-lucide="trash-2" class="w-6 h-6"></i>
+                            </button>
+                            <button @click="save" class="flex-1 h-16 rounded-2xl bg-slate-900 text-white font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all">确认并保存</button>
+                        </div>
+                    </div>
+                </div>
+            </transition>
+        </template>
+    </div>
+
+    <script>
+        const pb = new PocketBase('/');
+        const { createApp, ref, onMounted, computed, nextTick, watch } = Vue;
+
+        createApp({
+            setup() {
+                const isLogged = ref(pb.authStore.isValid);
+                const loading = ref(false);
+                const showFilters = ref(false);
+                const iconsExpanded = ref(false); // 控制图标面板展开
+                const loginForm = ref({ email: '', password: '' });
+                const items = ref([]);
+                const showForm = ref(false);
+                const activeExpanded = ref(true);
+                const retiredExpanded = ref(false); 
+                const form = ref({});
+                const sortBy = ref('date_desc');
+                const filterCategory = ref('all');
+
+                // 新增下拉刷新逻辑
+                const touchStart = ref(0);
+                const refreshing = ref(false);
+
+                onMounted(() => {
+                    window.addEventListener('touchstart', e => {
+                      // 只有在页面顶部时才触发
+                        if (window.scrollY === 0) touchStart.value = e.touches[0].pageY;
+                    });
+
+                    window.addEventListener('touchmove', e => {
+                        const touchDiff = e.touches[0].pageY - touchStart.value;
+                        if (window.scrollY === 0 && touchDiff > 150 && !refreshing.value) {
+                            refreshing.value = true;
+                            window.location.reload(); // 强制刷新页面
+                        }
+                    });
+                    document.body.classList.add('loaded');
+                });
+                
+                const iconList = [
+                    'smartphone', 'tablet', 'laptop', 'monitor', 'watch', 'camera', 'headphones', 'speaker', 'tv', 'gamepad-2', 'hard-drive', 'mouse', 'cpu', 'keyboard', 'printer', 'wifi', 'battery', 'cable', 'headphones',
+                    'coffee', 'refrigerator', 'lamp', 'fan', 'air-vent', 'washing-machine', 'microwave', 'oven', 'plug-zap', 'bath', 'bed', 'sofa', 'utensils', 'glass-water',
+                    'shirt', 'footprints', 'glasses', 'umbrella', 'shopping-bag', 'briefcase', 'wallet', 'key', 
+                    'car', 'bike', 'bus', 'plane', 'anchor', 'dumbbell', 'mountain', 'map', 'compass', 'timer',
+                    'package', 'box', 'wrench', 'hammer', 'cog', 'archive', 'book', 'database', 'party-popper'
+                ];
+
+                const refreshIcons = () => nextTick(() => setTimeout(() => { lucide.createIcons(); }, 50));
+
+                const toggleIconExpand = () => {
+                    iconsExpanded.value = !iconsExpanded.value;
+                    refreshIcons();
+                };
+
+                const fetchData = async () => {
+                    if (!isLogged.value) return;
+                    try {
+                        items.value = await pb.collection('howmuch').getFullList();
+                        refreshIcons();
+                    } catch (e) { console.error(e); }
+                };
+
+                const calc = (item) => {
+                    const start = dayjs(item.buy_date);
+                    const end = item.status === 'retired' ? dayjs(item.retire_date || dayjs()) : dayjs();
+                    const days = Math.max(end.diff(start, 'day'), 1);
+                    const expensesTotal = (item.additional_expenses || []).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+                    const totalCost = (item.price || 0) + expensesTotal + (item.maintenance || 0) - (item.resale_price || 0);
+                    return { daily: (totalCost / days).toFixed(2), days, total: totalCost.toFixed(2) };
+                };
+
+                const isTargetMet = (item) => {
+                    if (!item.enable_target || !item.target_daily) return false;
+                    return parseFloat(calc(item).daily) <= parseFloat(item.target_daily);
+                };
+
+                const metTargetsCount = computed(() => items.value.filter(i => i.status === 'active' && isTargetMet(i)).length);
+                const categories = computed(() => [...new Set(items.value.map(i => i.category).filter(c => c && c.trim() !== ''))]);
+
+                const filteredActiveItems = computed(() => {
+                    let list = items.value.filter(i => i.status === 'active');
+                    if (filterCategory.value !== 'all') list = list.filter(i => i.category === filterCategory.value);
+                    return list.sort((a, b) => {
+                        const dailyA = parseFloat(calc(a).daily), dailyB = parseFloat(calc(b).daily);
+                        const totalA = parseFloat(calc(a).total), totalB = parseFloat(calc(b).total);
+                        switch(sortBy.value) {
+                            case 'date_desc': return dayjs(b.buy_date) - dayjs(a.buy_date);
+                            case 'date_asc': return dayjs(a.buy_date) - dayjs(b.buy_date);
+                            case 'price_desc': return (b.price || 0) - (a.price || 0);
+                            case 'price_asc': return (a.price || 0) - (b.price || 0);
+                            case 'total_desc': return totalB - totalA;
+                            case 'total_asc': return totalA - totalB;
+                            case 'daily_desc': return dailyB - dailyA;
+                            case 'daily_asc': return dailyA - dailyB;
+                            default: return 0;
+                        }
+                    });
+                });
+
+                
+
+                const retiredItems = computed(() => items.value.filter(i => i.status === 'retired').sort((a,b) => dayjs(b.retire_date) - dayjs(a.retire_date)));
+                const totalDailyCost = computed(() => items.value.filter(i => i.status === 'active').reduce((sum, i) => sum + parseFloat(calc(i).daily), 0).toFixed(2));
+                
+                const activeTotal = computed(() => {
+                    const total = items.value.filter(i => i.status === 'active').reduce((sum, i) => sum + (i.price || 0) + (i.additional_expenses || []).reduce((s, e) => s + (Number(e.amount) || 0), 0), 0);
+                    return total >= 10000 ? (total / 10000).toFixed(2) + '万' : total.toLocaleString();
+                });
+                
+                const grandTotal = computed(() => {
+                    const total = items.value.reduce((sum, i) => sum + (i.price || 0) + (i.additional_expenses || []).reduce((s, e) => s + (Number(e.amount) || 0), 0), 0);
+                    return total >= 10000 ? (total / 10000).toFixed(2) + '万' : total.toLocaleString();
+                });
+
+                const handleLogin = async () => {
+                    loading.value = true;
+                    try {
+                        await pb.collection('users').authWithPassword(loginForm.value.email, loginForm.value.password);
+                        isLogged.value = true;
+                        fetchData();
+                    } catch (e) { alert("验证失败"); } finally { loading.value = false; }
+                };
+
+                const handleLogout = () => { pb.authStore.clear(); isLogged.value = false; items.value = []; };
+
+                const openForm = (item = null) => {
+                    iconsExpanded.value = false; // 每次打开表单默认图标折叠
+                    form.value = item ? { 
+                        ...item, 
+                        buy_date: dayjs(item.buy_date).format('YYYY-MM-DD'),
+                        retire_date: item.retire_date ? dayjs(item.retire_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+                        additional_expenses: item.additional_expenses || [],
+                        enable_target: item.enable_target || false,
+                        target_daily: item.target_daily || null
+                    } : { 
+                        name: '', price: null, status: 'active', icon: 'package', category: '', remark: '', 
+                        buy_date: dayjs().format('YYYY-MM-DD'), retire_date: dayjs().format('YYYY-MM-DD'), resale_price: 0, additional_expenses: [],
+                        enable_target: false, target_daily: null
+                    };
+                    showForm.value = true;
+                };
+
+                const addExpense = () => {
+                    if (!form.value.additional_expenses) form.value.additional_expenses = [];
+                    form.value.additional_expenses.push({ name: '', amount: null, date: dayjs().format('YYYY-MM-DD') });
+                    refreshIcons();
+                };
+
+                const save = async () => {
+                    if(!form.value.name || !form.value.price) return alert("名称和价格必填");
+                    const data = { ...form.value };
+                    data.retire_date = data.status === 'retired' ? dayjs(data.retire_date).toISOString() : null;
+                    try {
+                        data.id ? await pb.collection('howmuch').update(data.id, data) : await pb.collection('howmuch').create(data);
+                        showForm.value = false; fetchData();
+                    } catch (e) { alert("保存失败"); }
+                };
+
+                const deleteItem = async () => {
+                    if (confirm('确认删除？')) {
+                        await pb.collection('howmuch').delete(form.value.id);
+                        showForm.value = false; fetchData();
+                    }
+                };
+
+                
+// 在 setup() 内部，save 函数附近添加
+const fileInput = ref(null); // 用于引用 HTML 中的 input element
+
+const handleExport = async () => {
+    try {
+        // 获取全部记录
+        const records = await pb.collection('howmuch').getFullList({ sort: '-created' });
+        const dataStr = JSON.stringify(records, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `howmuch_data_${dayjs().format('YYYYMMDD')}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (e) { 
+        alert("导出失败，请检查网络或登录状态"); 
+    }
+};
+
+const handleImport = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (!confirm(`准备导入 ${data.length} 条数据，确定吗？`)) return;
+            
+            let successCount = 0;
+            for (const item of data) {
+                // 【核心修改】手动构建提交对象，确保没有 null 值和冲突字段
+                const newItem = {
+                    "name": item.name || "未命名资产",
+                    "price": Number(item.price) || 0,
+                    // 确保日期格式是 ISO 字符串或简单日期
+                    "buy_date": item.buy_date ? dayjs(item.buy_date).toISOString() : dayjs().toISOString(),
+                    "category": item.category || "",
+                    "status": item.status || "active",
+                    "icon": item.icon || "package",
+                    "maintenance": Number(item.maintenance) || 0,
+                    "resale_price": Number(item.resale_price) || 0,
+                    "remark": item.remark || "",
+                    // 处理目标挑战字段
+                    "enable_target": Boolean(item.enable_target),
+                    "target_daily": item.target_daily ? Number(item.target_daily) : 0,
+                    "expect_days": Number(item.expect_days) || 0,
+                    // 重要：如果 additional_expenses 是 null，强制转为空数组 [] 
+                    // 因为您的 calc 函数和表单逻辑预期它是一个数组
+                    "additional_expenses": Array.isArray(item.additional_expenses) ? item.additional_expenses : []
+                };
+
+                try {
+                    await pb.collection('howmuch').create(newItem);
+                    successCount++;
+                } catch (singleErr) {
+                    console.error(`单条记录 [${item.name}] 导入失败:`, singleErr.data);
+                    // 继续导入下一条，不中断整个流程
+                }
+            }
+            
+            alert(`导入处理完成！成功: ${successCount} / 总数: ${data.length}`);
+            fetchData();
+            showForm.value = false;
+        } catch (err) { 
+            console.error("解析文件失败:", err);
+            alert("导入失败，请检查文件格式是否正确"); 
+        }
+    };
+    reader.readAsText(file);
+};
+
+
+                onMounted(fetchData);
+                watch([showForm, showFilters, sortBy, filterCategory, isLogged], refreshIcons);
+                
+                return { 
+                    isLogged, loading, loginForm, handleLogin, handleLogout, 
+                    items, filteredActiveItems, retiredItems, showForm, showFilters, iconsExpanded,
+                    activeExpanded, retiredExpanded, form, iconList, 
+                    calc, totalDailyCost, activeTotal, grandTotal, metTargetsCount,
+                    openForm, save, deleteItem, categories, sortBy, filterCategory,
+                    addExpense, isTargetMet, toggleIconExpand,handleExport, handleImport,fileInput
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
