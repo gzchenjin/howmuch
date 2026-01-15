@@ -13,13 +13,19 @@
 * **前端**：Vue 3 (Composition API), Tailwind CSS。
 * **后端**：[PocketBase](https://pocketbase.io/) (极简的开源后端方案)。
 * **图标**：Lucide Icons。
+
 ### 界面预览
 ![登录页面](screenshots/verify.png)
 ![看板页面](screenshots/home.png)
 ![修改页面](screenshots/modify.png)
 ![退役设备显示](screenshots/retire.jpg)
 ![图标](screenshots/icon.jpg)
-
+<p align="center">
+  <img src="screenshots/home.png" width="30%" />
+  <img src="screenshots/verify.png" width="30%" />
+  <img src="screenshots/modify.png" width="30%" />
+  <img src="screenshots/retire.jpg" width="30%" />
+</p>
 
 🚀 快速部署 (以 Linux 为例)
 
