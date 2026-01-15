@@ -17,10 +17,10 @@
 ### 界面预览
 ![图标](screenshots/icon.jpg)
 <p align="center">
-  <img src="screenshots/home.png" width="20%" />
-  <img src="screenshots/verify.png" width="20%" />
-  <img src="screenshots/modify.png" width="20%" />
-  <img src="screenshots/retire.jpg" width="20%" />
+  <img src="screenshots/home.png" width="25%" />
+  <img src="screenshots/verify.png" width="25%" />
+  <img src="screenshots/modify.png" width="25%" />
+  <img src="screenshots/retire.jpg" width="25%" />
 </p>
 
 🚀 快速部署 (以 Linux 为例)
