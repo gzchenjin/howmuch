@@ -22,6 +22,8 @@ mkdir howmuch && cd howmuch
 # 下载并解压 PocketBase (请根据系统选择版本)
 wget [https://github.com/pocketbase/pocketbase/releases/download/v0.22.21/pocketbase_0.22.21_linux_amd64.zip](https://github.com/pocketbase/pocketbase/releases/download/v0.22.21/pocketbase_0.22.21_linux_amd64.zip)
 unzip pocketbase_0.22.21_linux_amd64.zip
+```
+
 
 2. 部署代码
 将本仓库中的 pb_public/ 文件夹及其内容上传至服务器工作目录。
