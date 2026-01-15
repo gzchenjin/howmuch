@@ -15,10 +15,6 @@
 * **图标**：Lucide Icons。
 
 ### 界面预览
-![登录页面](screenshots/verify.png)
-![看板页面](screenshots/home.png)
-![修改页面](screenshots/modify.png)
-![退役设备显示](screenshots/retire.jpg)
 ![图标](screenshots/icon.jpg)
 <p align="center">
   <img src="screenshots/home.png" width="30%" />
