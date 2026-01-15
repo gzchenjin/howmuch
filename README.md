@@ -13,6 +13,13 @@
 * **前端**：Vue 3 (Composition API), Tailwind CSS。
 * **后端**：[PocketBase](https://pocketbase.io/) (极简的开源后端方案)。
 * **图标**：Lucide Icons。
+### 界面预览
+![登录页面](screenshots/verify.png)
+![看板页面](screenshots/home.png)
+![修改页面](screenshots/modify.png)
+![退役设备显示](screenshots/retire.jpg)
+![图标](screenshots/icon.jpg)
+
 
 🚀 快速部署 (以 Linux 为例)
 
@@ -26,19 +33,17 @@ unzip pocketbase_0.22.21_linux_amd64.zip
 
 
 2. 部署代码
-将本仓库中的 pb_public/ 文件夹及其内容上传至服务器工作目录。
-
-确保结构为 your-path/pocketbase 和 your-path/pb_public/index.html。
+* 将本仓库中的 pb_public/ 文件夹及其内容上传至服务器工作目录。
+* 确保结构为 your-path/pocketbase 和 your-path/pb_public/index.html。
 
 3. 初始化数据库
-运行服务：./pocketbase serve --http="0.0.0.0:9001"。
-
-访问后台：http://服务器IP:9001/_/ 创建管理员。
-
-关键步骤：在 Settings -> Import collections 中，导入仓库里的 pb_schema.json 文件以恢复数据库结构。
+* 运行服务：./pocketbase serve --http="0.0.0.0:9001"。
+* 访问后台：http://服务器IP:9001/_/ 创建管理员。
+* 关键步骤：在 Settings -> Import collections 中，导入仓库里的 pb_schema.json 文件以恢复数据库结构。
 
 📱 手机端使用
-建议使用手机浏览器访问地址，并选择 “添加到主屏幕”，以获得最佳的全屏看板体验。
+* 建议使用手机浏览器访问地址，并选择 “添加到主屏幕”，以获得最佳的全屏看板体验。
+
 
 📄 开源协议
-本项目遵循 MIT 协议开源。
+* 本项目遵循 MIT 协议开源。
