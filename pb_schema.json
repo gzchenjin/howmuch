@@ -371,15 +371,13 @@
       },
       {
         "hidden": false,
-        "id": "add_exp_id",
-        "max": null,
-        "min": null,
+        "id": "json2655473549",
+        "maxSize": 0,
         "name": "additional_expenses",
-        "onlyInt": false,
         "presentable": false,
         "required": false,
         "system": false,
-        "type": "number"
+        "type": "json"
       },
       {
         "hidden": false,
