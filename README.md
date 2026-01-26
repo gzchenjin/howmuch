@@ -34,12 +34,53 @@ wget [https://github.com/pocketbase/pocketbase/releases/download/v0.22.21/pocket
 unzip pocketbase_0.22.21_linux_amd64.zip
 ```
 
-
 2. 部署代码
-* 将本仓库中的 pb_public/ 文件夹及其内容上传至服务器工作目录。
-* 确保结构为 your-path/pocketbase 和 your-path/pb_public/index.html。
+* 建立静态网页目录：
+```bash
+mkdir -p /root/howmuch/pb_public
+```
+* 请将你的 index.html、manifest.json 和 icon.png 放入此目录。
 
-3. 初始化数据库
+3. 配置后台永久运行 (Systemd)
+* 创建服务文件：
+```bash
+nano /etc/systemd/system/howmuch.service
+```
+* 写入以下配置（已显式指定数据目录以增强稳定性）：
+```bash
+[Unit]
+Description=HowMuch Asset Management Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/howmuch
+# 明确指向程序路径、监听端口及数据存放目录
+ExecStart=/root/howmuch/pocketbase serve --http="0.0.0.0:9001" --dir=/root/howmuch/pb_data
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+4. 启动服务：
+```bash
+systemctl daemon-reload
+systemctl enable --now howmuch
+```
+
+5. 开放防火墙端口：
+```bash
+# 放行 9001 端口
+ufw allow 9001/tcp
+```
+
+6. 记得同步要放行vultr云服务器的9001端口
+
+
+7. 初始化数据库
 * 运行服务：./pocketbase serve --http="0.0.0.0:9001"。
 * 访问后台：http://服务器IP:9001/_/ 创建管理员。
 * 关键步骤：在 Settings -> Import collections 中，导入仓库里的 pb_schema.json 文件以恢复数据库结构。
