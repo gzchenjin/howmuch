@@ -77,7 +77,7 @@ systemctl enable --now howmuch
 ufw allow 9001/tcp
 ```
 
-6. 记得同步要放行vultr云服务器的9001端口
+6. 记得同步要放行云服务器的9001端口，新增防火墙规则
 
 
 7. 初始化数据库
