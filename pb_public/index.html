@@ -398,7 +398,7 @@
                 
                 const iconList = [
                     'smartphone', 'tablet', 'laptop', 'monitor', 'watch', 'camera', 'headphones', 'speaker', 'tv', 'gamepad-2', 'hard-drive', 'mouse', 'cpu', 'keyboard', 'printer', 'wifi', 'battery', 'cable', 'headphones',
-                    'coffee', 'refrigerator', 'lamp', 'fan', 'air-vent', 'washing-machine', 'microwave', 'oven', 'plug-zap', 'bath', 'bed', 'sofa', 'utensils', 'glass-water',
+                    'coffee', 'refrigerator', 'lamp', 'fan', 'air-vent', 'washing-machine', 'microwave', 'flame', 'plug-zap', 'bath', 'bed', 'sofa', 'utensils', 'glass-water',
                     'shirt', 'footprints', 'glasses', 'umbrella', 'shopping-bag', 'briefcase', 'wallet', 'key', 
                     'car', 'bike', 'bus', 'plane', 'anchor', 'dumbbell', 'mountain', 'map', 'compass', 'timer',
                     'package', 'box', 'wrench', 'hammer', 'cog', 'archive', 'book', 'database', 'party-popper'
@@ -503,7 +503,11 @@
                         ...item, 
                         buy_date: dayjs(item.buy_date).format('YYYY-MM-DD'),
                         retire_date: item.retire_date ? dayjs(item.retire_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
-                        additional_expenses: item.additional_expenses || [],
+                        // 👇👇👇 【核心修改在这里】 👇👇👇
+                        // 原代码: additional_expenses: item.additional_expenses || [],
+                        // 修改为: 增加 .sort() 排序逻辑 (dayjs(b.date) - dayjs(a.date) 代表降序，最新的在上面)
+                        additional_expenses: (item.additional_expenses || []).sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf()),
+                        // 👆👆👆 【修改结束】 👆👆👆
                         enable_target: item.enable_target || false,
                         target_daily: item.target_daily || null
                     } : { 
@@ -521,23 +525,66 @@
                 };
 
                 const save = async () => {
+                    // 1. 基础验证
                     if(!form.value.name || !form.value.price) return alert("名称和价格必填");
-                    const data = { ...form.value };
-                    data.retire_date = data.status === 'retired' ? dayjs(data.retire_date).toISOString() : null;
-                    try {
-                        data.id ? await pb.collection('howmuch').update(data.id, data) : await pb.collection('howmuch').create(data);
-                        showForm.value = false; fetchData();
-                    } catch (e) { alert("保存失败"); }
-                };
 
-                const deleteItem = async () => {
-                    if (confirm('确认删除？')) {
-                        await pb.collection('howmuch').delete(form.value.id);
-                        showForm.value = false; fetchData();
+                    // 2. 浅拷贝表单数据
+                    const data = { ...form.value };
+
+                    // 3. 【多用户适配】如果是新记录，自动绑定当前登录用户的 ID
+                    if (!data.id && pb.authStore.isValid) { 
+                        // pb.authStore.model 存储了当前通过验证的用户信息
+                        data.user = pb.authStore.model.id; //
+                    }
+                
+                    // 4. 【核心清洗】处理额外费用数组，防止 JSON 格式错误或 null 值导致保存失败
+                    if (data.additional_expenses) {
+                        data.additional_expenses = data.additional_expenses
+                            .filter(exp => exp.name && exp.name.trim() !== '') // 过滤掉没有名称的空行
+                            .map(exp => ({
+                                name: exp.name,
+                                amount: Number(exp.amount) || 0, // 强制转换为数字类型，防止后端报错
+                                date: exp.date || dayjs().format('YYYY-MM-DD')
+                            }));
+                    }
+                
+                    // 5. 格式化日期与目标挑战字段
+                    data.retire_date = data.status === 'retired' ? dayjs(data.retire_date).toISOString() : null;
+                    if (data.enable_target) {
+                        data.target_daily = Number(data.target_daily) || 0;
+                    }
+                
+                    try {
+                        // 6. 执行 PocketBase 操作
+                        data.id ? await pb.collection('howmuch').update(data.id, data) : await pb.collection('howmuch').create(data);
+                    
+                        showForm.value = false; 
+                        fetchData(); // 成功后刷新数据列表
+                    } catch (e) { 
+                        // 如果失败，打印具体错误到控制台方便排查
+                        console.error("保存失败详情:", e.response?.data || e);
+                        alert("保存失败，请检查数据格式或登录状态"); 
                     }
                 };
 
-                
+                const deleteItem = async () => {
+                    // 直接从 form 中获取 id，而不是通过参数获取
+                    const id = form.value.id;
+                    if (!id) return;
+
+                    if (!confirm("确定要删除这条记录吗？")) return;
+
+                    try {
+                        await pb.collection('howmuch').delete(id);
+                        showForm.value = false; // 删除后关闭弹窗
+                        fetchData(); // 成功后刷新列表
+                    } catch (e) {
+                        console.error("删除失败:", e.response?.data || e);
+                        alert("删除失败，请检查权限");
+                    }
+                };
+
+
                 // 在 setup() 内部，save 函数附近添加
                 const fileInput = ref(null); // 用于引用 HTML 中的 input element
 
@@ -588,7 +635,8 @@
                                     "expect_days": Number(item.expect_days) || 0,
                                     // 重要：如果 additional_expenses 是 null，强制转为空数组 [] 
                                     // 因为您的 calc 函数和表单逻辑预期它是一个数组
-                                    "additional_expenses": Array.isArray(item.additional_expenses) ? item.additional_expenses : []
+                                    "additional_expenses": Array.isArray(item.additional_expenses) ? item.additional_expenses : [],
+                                    "user": pb.authStore.model.id
                                 };
                             
                                 try {
