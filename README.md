@@ -1,4 +1,4 @@
- HowMuch 资产看板 💰
+ HowMuch 资产看板 💰【安卓版本见Releases：howmuch beta】
 
 **HowMuch** 是一款基于 PocketBase 和 Vue 3 开发的轻量化个人资产持有成本管理工具。它能帮你计算资产的“日均持有成本”，助你审视消费价值。
 
